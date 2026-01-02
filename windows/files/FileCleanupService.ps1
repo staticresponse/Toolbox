@@ -7,6 +7,11 @@
         TTL_HOURS     - Time to live in hours for files
         CLEANUP_LOG   - Optional log path
         CHECK_INTERVAL_MIN - Optional interval to check folder
+.NOTES
+    Service version       - 1.0.0
+    Release baseline      - 1.0.0
+    IOC                   - 2026-01-02
+    Last Modified         - 2026-01-02
 #>
 
 # INSTALL
