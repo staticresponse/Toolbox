@@ -9,6 +9,10 @@
         CHECK_INTERVAL_MIN - Optional interval to check folder
 #>
 
+# INSTALL
+# sc create FileCleanupService binPath= "powershell.exe -File C:\Scripts\FileCleanupService.ps1" start= auto
+# sc start FileCleanupService
+
 # -------------------------------
 # Configuration
 # -------------------------------
