@@ -1,20 +1,57 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# put your sns topic arn and region here to use aws sns to send a weekly email
-snsTopic=""
-snsRegion=""
-cat /dev/null > /data/admin/diskFull.txt
+#######################################
+# Configuration
+#######################################
+SNS_TOPIC_ARN=""
+SNS_REGION=""
 
-df -H | grep -vE '^Filesystem|tmpfs' | awk '{ print $5 " " $1}' | while read output;
+OUTPUT_FILE="/data/admin/diskFull.txt"
+DATE_FMT="+%Y-%m-%d %H:%M:%S"
 
-do
-  echo $output
-  usep=$(echo $output | awk '{print $1}' | cut -f '%' -f1)
-  partition=$(echo $output | awk '{ print $2}')
-  echo "$partition - ($usep%)" >> /data/admin/diskFull.txt
-done
+#######################################
+# Functions
+#######################################
+log() {
+  echo "[$(date "$DATE_FMT")] $*"
+}
 
+collect_disk_usage() {
+  log "Collecting disk usage"
 
-# send the sns message
-aws sns publish --region $snsRegion --topic-arn $snsTopic --message file:////data/admin/diskFull.txt --suject "Disk Space Notification"
- 
+  {
+    echo "Disk Space Report"
+    echo "Generated: $(date)"
+    echo "----------------------------------"
+
+    df -H --output=pcent,source \
+      | tail -n +2 \
+      | while read -r usep partition; do
+          usep="${usep%\%}"
+          printf "%-25s %s%%\n" "$partition" "$usep"
+        done
+  } > "$OUTPUT_FILE"
+}
+
+send_sns_notification() {
+  if [[ -z "$SNS_TOPIC_ARN" || -z "$SNS_REGION" ]]; then
+    log "SNS not configured — skipping notification"
+    return
+  fi
+
+  log "Sending SNS notification"
+  aws sns publish \
+    --region "$SNS_REGION" \
+    --topic-arn "$SNS_TOPIC_ARN" \
+    --message "file://$OUTPUT_FILE" \
+    --subject "Disk Space Notification"
+}
+
+#######################################
+# Main
+#######################################
+collect_disk_usage
+send_sns_notification
+
+log "Done"

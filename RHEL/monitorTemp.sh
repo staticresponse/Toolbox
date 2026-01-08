@@ -1,9 +1,34 @@
-#!/bin/bash
-# place into cron to run automatically
-# dependent on the bc package for doing math
-# can monitor the log with monitoring software and create automated actions
+#!/usr/bin/env bash
+set -euo pipefail
 
-cat /dev/null > /var/log/piTemp.log
-temp=`cat /sys/class/thermal/thermal_zone0/temp`
-degrees=`/opt/scripts/bc-1.07/bc/bc -l <<< "($temp / 1000) * 9 /5"`
-printf "%.3f\n" $degrees >> /var/log/piTemp.log
+#######################################
+# Configuration
+#######################################
+THERMAL_ZONE="/sys/class/thermal/thermal_zone0/temp"
+LOG_FILE="/var/log/piTemp.log"
+DATE_FMT="+%Y-%m-%d %H:%M:%S"
+
+#######################################
+# Functions
+#######################################
+log() {
+  echo "[$(date "$DATE_FMT")] $*" >> "$LOG_FILE"
+}
+
+read_temperature_fahrenheit() {
+  awk '
+    {
+      celsius = $1 / 1000
+      fahrenheit = (celsius * 9 / 5) + 32
+      printf "%.3f\n", fahrenheit
+    }
+  ' "$THERMAL_ZONE"
+}
+
+#######################################
+# Main
+#######################################
+: > "$LOG_FILE"
+
+temp_f=$(read_temperature_fahrenheit)
+log "CPU Temperature: ${temp_f}°F"

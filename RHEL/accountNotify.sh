@@ -1,26 +1,67 @@
-#!/bin/sh -v
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Schedule this as a weekly cron to monitor the password expiration for a list of user accounts
+#######################################
+# Configuration
+#######################################
+ACCOUNT_LIST="/data/admin/accountlist.txt"
+OUTPUT_FILE="/data/admin/accountreport.txt"
 
+SNS_TOPIC_ARN=""
+SNS_REGION=""
 
-# use a txt file to hold the desired accounts to monitor. New line for each account
-list=`cat /data/admin/accountlist.txt`
+DATE_FMT="+%Y-%m-%d %H:%M:%S"
 
+#######################################
+# Functions
+#######################################
+log() {
+  echo "[$(date "$DATE_FMT")] $*"
+}
 
-# put your sns topic arn here to use aws sns to send a weekly email
-snsTopic=""
+collect_password_expirations() {
+  log "Generating password expiration report"
 
+  {
+    echo "Password Expiration Report"
+    echo "Generated: $(date)"
+    echo "----------------------------------"
+  } > "$OUTPUT_FILE"
 
-# creates a txt file to hold the report
-echo -e "Password Expiration Report\n" > /data/admin/accountreport.txt
+  while IFS= read -r user; do
+    [[ -z "$user" || "$user" =~ ^# ]] && continue
 
-# loop throught the account list
-for i in $list
-do
-  f=`chage -l $i | grep "Password expires" | awk '{print $5,$4 $6)'`
-  echo -e "${i} expires on:\t${f}" >> /data/admin/accountreport.txt
-done
+    if ! chage_output=$(chage -l "$user" 2>/dev/null); then
+      printf "%-20s %s\n" "$user" "ERROR: user not found" >> "$OUTPUT_FILE"
+      continue
+    fi
 
-# send the sns message
-aws sns publish --region"<your regoin for the sns queue>" --topic-arn $snsTopic --message file:////data/admin/accountreport.txt --suject "Password Expiration Report"
- 
+    expires=$(echo "$chage_output" \
+      | awk -F: '/Password expires/ {print $2}' \
+      | xargs)
+
+    printf "%-20s %s\n" "$user" "$expires" >> "$OUTPUT_FILE"
+  done < "$ACCOUNT_LIST"
+}
+
+send_sns_notification() {
+  if [[ -z "$SNS_TOPIC_ARN" || -z "$SNS_REGION" ]]; then
+    log "SNS not configured — skipping notification"
+    return
+  fi
+
+  log "Sending SNS notification"
+  aws sns publish \
+    --region "$SNS_REGION" \
+    --topic-arn "$SNS_TOPIC_ARN" \
+    --message "file://$OUTPUT_FILE" \
+    --subject "Password Expiration Report"
+}
+
+#######################################
+# Main
+#######################################
+collect_password_expirations
+send_sns_notification
+
+log "Done"
