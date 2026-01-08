@@ -50,9 +50,9 @@ def send_event(obj):
     )
 
     if response["FailedEntryCount"] > 0:
-        print("❌ Failed:", response["Entries"])
+        print("Failed:", response["Entries"])
     else:
-        print(f"✅ Sent: {obj['Key']} @ {event_time.isoformat()}")
+        print(f"Sent: {obj['Key']} @ {event_time.isoformat()}")
 
 
 def main():
